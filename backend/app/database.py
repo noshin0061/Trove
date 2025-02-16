@@ -6,14 +6,13 @@ import os
 
 load_dotenv()
 
-POSTGRES_URL = os.getenv("DATABASE_URL", "postgresql://ryunoshin@localhost/H2M")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://ryunoshin@localhost/H2M")
 
-engine = create_engine(POSTGRES_URL)
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
-# Dependency
 def get_db():
     db = SessionLocal()
     try:
