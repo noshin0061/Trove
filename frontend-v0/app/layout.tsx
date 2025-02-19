@@ -42,7 +42,7 @@ export default function RootLayout({
         <main className="container mx-auto p-4">{children}</main>
         <footer className="bg-gray-800 p-4 mt-8">
           <div className="container mx-auto text-center">
-            <p>&copy; 2023 英語学習. All rights reserved.</p>
+            <p>&copy; 2025 英語学習. All rights reserved.</p>
           </div>
         </footer>
       </body>
