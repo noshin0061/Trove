@@ -1,25 +1,24 @@
 # app/routes/question.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
+from ..database import get_db
+from ..models.models import Question, UserAnswer, MistakeWord, FavoriteQuestion, User
+from ..routes.auth import get_current_user  # authからインポート
+import os
 from openai import OpenAI
 import random
-import os
 from dotenv import load_dotenv
-from ..database import get_db
-from ..models.models import Question, UserAnswer, MistakeWord, FavoriteQuestion
-from ..utils.auth import get_current_user
-from ..models.models import User
 
 load_dotenv()
 
 router = APIRouter()
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-@router.post("/questions/generate")
+@router.post("/generate")
 async def generate_question(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)  # 認証の依存関係
 ):
     try:
         # 間違えた単語があるか確認
@@ -74,7 +73,7 @@ class AnswerRequest(BaseModel):
     question_id: int
     answer_text: str
 
-@router.post("/answers/check")
+@router.post("/check")
 async def check_answer(
     request: AnswerRequest,
     db: Session = Depends(get_db),
@@ -112,7 +111,7 @@ async def check_answer(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/questions/{question_id}/favorite")
+@router.post("/{question_id}/favorite")
 async def toggle_favorite(
     question_id: int,
     db: Session = Depends(get_db),

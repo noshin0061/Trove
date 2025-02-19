@@ -4,8 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes import question, auth
 from .database import engine
 from .models import models
+import logging
+
 
 app = FastAPI()
+
+# main.py
+
+logging.basicConfig(level=logging.DEBUG)
 
 # CORSの設定
 app.add_middleware(
@@ -20,5 +26,8 @@ app.add_middleware(
 models.Base.metadata.create_all(bind=engine)
 
 # ルーターの登録
-app.include_router(auth.router, prefix="/api/v1", tags=["auth"])
-app.include_router(question.router, prefix="/api/v1", tags=["questions"])
+app.include_router(auth.router, tags=["auth"])
+app.include_router(
+    question.router,
+    prefix="/api/v1/questions",  # ここでプレフィックスを設定
+)

@@ -18,30 +18,38 @@ export default function QuestionsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login')
-    } else if (isAuthenticated) {
-      generateNewQuestion()
-    }
-  }, [isLoading, isAuthenticated, router])
+  // QuestionsPage.tsx の一部を修正
 
-  const generateNewQuestion = async () => {
+const generateNewQuestion = async () => {
     try {
       setIsSubmitting(true)
+      const headers = getAuthHeader();
+      console.log('Request headers:', headers); // デバッグ用
+  
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeader()
-        }
+          ...headers
+        },
+        credentials: 'include'  // 認証情報を含める
       })
       
       if (!response.ok) {
-        throw new Error('Failed to generate question')
+        const errorData = await response.json();
+        console.error('Error response:', {
+          status: response.status,
+          data: errorData
+        });
+        if (response.status === 401) {
+          router.push('/login');
+          return;
+        }
+        throw new Error(errorData.detail || 'Failed to generate question');
       }
       
       const data: QuestionResponse = await response.json()
+      console.log('Question generated:', data); // デバッグ用
       setQuestion({
         id: data.id,
         japanese_text: data.japanese_text,
@@ -58,13 +66,32 @@ export default function QuestionsPage() {
       setIsSubmitting(false)
     }
   }
+  
+  useEffect(() => {
+    const initializeQuestions = async () => {
+      if (!isLoading) {
+        console.log('Auth state:', { isAuthenticated, isLoading }); // デバッグ用
+        if (!isAuthenticated) {
+          router.push('/login')
+        } else {
+          try {
+            await generateNewQuestion()
+          } catch (error) {
+            console.error('Error in initialization:', error)
+          }
+        }
+      }
+    }
+  
+    initializeQuestions()
+  }, [isLoading, isAuthenticated, router])
 
   const submitAnswer = async () => {
     if (!question || !answer.trim()) return
 
     try {
       setIsSubmitting(true)
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/answers/check`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/check`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

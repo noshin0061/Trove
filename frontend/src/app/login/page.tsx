@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -10,6 +11,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const { login } = useAuth() // useAuthからlogin関数を取得
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,16 +31,17 @@ export default function LoginPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Login failed')
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Login failed')
       }
 
       const data = await response.json()
-      // トークンをローカルストレージに保存
-      localStorage.setItem('token', data.access_token)
-      // ホームページへリダイレクト
+      console.log('Login successful, received token:', data.access_token.substring(0, 10) + '...') // デバッグ用
+      login(data.access_token)
       router.push('/')
     } catch (error) {
-      setError('ログインに失敗しました。メールアドレスとパスワードを確認してください。')
+      console.error('Login error:', error) // デバッグ用
+      setError(error instanceof Error ? error.message : 'ログインに失敗しました')
     } finally {
       setIsLoading(false)
     }

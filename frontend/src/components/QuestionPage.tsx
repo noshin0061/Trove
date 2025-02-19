@@ -1,149 +1,262 @@
-// components/QuestionPage.tsx
-
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import { useRouter } from 'next/navigation'
 import { Question, QuestionResponse, AnswerResponse, FavoriteResponse } from '@/types'
-import { Mic, Star, StarOff } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { VoiceInput } from '@/components/VoiceInput'
+import Link from 'next/link'
+import { ArrowLeft, Star, StarOff } from 'lucide-react'
 
-export default function QuestionPage() {
-  const [question, setQuestion] = useState<Question | null>(null)
-  const [answer, setAnswer] = useState('')
-  const [isRecording, setIsRecording] = useState(false)
-  const [feedback, setFeedback] = useState('')
-  const [isFavorite, setIsFavorite] = useState(false)
+export default function QuestionsPage() {
+    const router = useRouter()
+    const { isAuthenticated, isLoading, getAuthHeader } = useAuth()
+    const [question, setQuestion] = useState<Question | null>(null)
+    const [answer, setAnswer] = useState('')
+    const [feedback, setFeedback] = useState('')
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isFavorite, setIsFavorite] = useState(false)
 
-  useEffect(() => {
-    generateNewQuestion()
-  }, [])
+    const generateNewQuestion = useCallback(async () => {
+        try {
+            setIsSubmitting(true);
+            const headers = getAuthHeader();
+            console.log('Auth headers for request:', headers); // デバッグ用
 
-  const generateNewQuestion = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: 1 }) // TODO: 実際のユーザーID
-      })
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...headers
+                },
+                credentials: 'include' // 認証情報を含める
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('API Error:', {
+                    status: response.status,
+                    data: errorData
+                });
+                if (response.status === 401) {
+                    router.push('/login');
+                    return;
+                }
+                throw new Error(errorData.detail || 'Failed to generate question');
+            }
+
+            const data: QuestionResponse = await response.json();
+            setQuestion({
+                id: data.id,
+                japanese_text: data.japanese_text,
+            });
+            setAnswer('');
+            setFeedback('');
+            setIsFavorite(false);
+        } catch (error) {
+            console.error('Error generating question:', error);
+            if (error instanceof Error) {
+                console.error('Error details:', error.message);
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [getAuthHeader, router]);
+
+    useEffect(() => {
+        if (!isLoading) {
+            if (isAuthenticated) {
+                console.log('User is authenticated, generating question...'); // デバッグ用
+                generateNewQuestion();
+            } else {
+                console.log('User is not authenticated, redirecting to login...'); // デバッグ用
+                router.push('/login');
+            }
+        }
+    }, [isLoading, isAuthenticated, generateNewQuestion, router]);
+
+    // submitAnswer と toggleFavorite も同様に修正
+    const submitAnswer = async () => {
+        if (!question || !answer.trim()) return
       
-      if (!response.ok) {
-        throw new Error('Failed to generate question')
-      }
+        try {
+          setIsSubmitting(true)
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/check`, {  // URLを変更
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeader()
+            },
+            body: JSON.stringify({
+              question_id: question.id,
+              answer_text: answer
+            })
+          })
       
-      const data: QuestionResponse = await response.json()
-      setQuestion({
-        id: data.id,
-        japanese_text: data.japanese_text,
-      })
-      setAnswer('')
-      setFeedback('')
-    } catch (error) {
-      console.error('Error generating question:', error)
+          if (!response.ok) {
+            throw new Error('Failed to submit answer')
+          }
+      
+          const data: AnswerResponse = await response.json()
+          setFeedback(data.feedback)
+        } catch (error) {
+          console.error('Error submitting answer:', error)
+        } finally {
+          setIsSubmitting(false)
+        }
     }
-  }
 
-  const startVoiceRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // TODO: 音声認識の実装
-      setIsRecording(true)
-    } catch (err) {
-      console.error('Error accessing microphone:', err)
-    }
-  }
-
-  const submitAnswer = async () => {
+  const toggleFavorite = useCallback(async () => {
     if (!question) return
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/answers/check`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question_id: question.id,
-          answer_text: answer,
-          is_voice: false
-        })
-      })
+      setIsSubmitting(true)
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/${question.id}/favorite`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeader()
+          }
+        }
+      )
 
       if (!response.ok) {
-        throw new Error('Failed to submit answer')
+        throw new Error('Failed to toggle favorite')
       }
 
-      const data: AnswerResponse = await response.json()
-      setFeedback(data.feedback)
+      const data: FavoriteResponse = await response.json()
+      setIsFavorite(data.is_favorite)
     } catch (error) {
-      console.error('Error submitting answer:', error)
+      console.error('Error toggling favorite:', error)
+    } finally {
+      setIsSubmitting(false)
     }
-  }
+  }, [question, getAuthHeader]); // 必要な依存関係を追加
 
-  const toggleFavorite = async () => {
-    if (!question) return
+  const handleVoiceInput = useCallback((text: string) => {
+    setAnswer(text)
+  }, []); // 依存関係なし
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/questions/${question.id}/favorite`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: 1 }) // TODO: 実際のユーザーID
-    })
-    const data = await response.json()
-    setIsFavorite(data.is_favorite)
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
+        <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+      </div>
+    )
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      <div className="mb-8">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">問題</h2>
+    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200">
+      <header className="border-b dark:border-gray-800">
+        <div className="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/"
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+            >
+              <ArrowLeft size={24} />
+            </Link>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
+              英作文練習
+            </h1>
+          </div>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="max-w-2xl mx-auto p-4 sm:p-8">
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <div className="flex justify-between items-start">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                問題
+              </h2>
+              <button
+                onClick={toggleFavorite}
+                disabled={isSubmitting || !question}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isFavorite ? 
+                  <Star className="text-yellow-400" /> : 
+                  <StarOff className="text-gray-400" />
+                }
+              </button>
+            </div>
+            
+            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <p className="text-gray-900 dark:text-white">
+                {question?.japanese_text || 'Loading...'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <label 
+              htmlFor="answer-input"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              英訳を入力
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="answer-input"
+                type="text"
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                disabled={isSubmitting}
+                className="flex-1 p-2 border dark:border-gray-700 rounded-lg
+                          bg-white dark:bg-gray-800 
+                          text-gray-900 dark:text-white
+                          disabled:opacity-50 disabled:cursor-not-allowed"
+                placeholder="英語で回答してください"
+              />
+              <VoiceInput onResult={handleVoiceInput} />
+            </div>
+          </div>
+
           <button
-            onClick={toggleFavorite}
-            className="p-2 hover:bg-gray-100 rounded-full"
+            onClick={submitAnswer}
+            disabled={isSubmitting || !answer.trim() || !question}
+            className="w-full py-2 px-4 rounded-lg font-medium
+                     bg-blue-600 hover:bg-blue-700 
+                     dark:bg-blue-500 dark:hover:bg-blue-600
+                     text-white
+                     disabled:bg-gray-300 dark:disabled:bg-gray-700
+                     disabled:cursor-not-allowed
+                     transition-colors"
           >
-            {isFavorite ? <Star className="text-yellow-400" /> : <StarOff />}
+            {isSubmitting ? '送信中...' : '回答を確認'}
+          </button>
+
+          {feedback && (
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
+                フィードバック
+              </h3>
+              <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap">
+                {feedback}
+              </p>
+            </div>
+          )}
+
+          <button
+            onClick={generateNewQuestion}
+            disabled={isSubmitting}
+            className="w-full py-2 px-4 rounded-lg font-medium
+                     bg-gray-200 hover:bg-gray-300 
+                     dark:bg-gray-700 dark:hover:bg-gray-600
+                     text-gray-900 dark:text-white
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition-colors"
+          >
+            次の問題へ
           </button>
         </div>
-        <p className="text-lg p-4 bg-gray-50 rounded-lg">
-          {question?.japanese_text}
-        </p>
-      </div>
-
-      <div className="mb-8">
-        <div className="flex gap-4 mb-4">
-          <input
-            type="text"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder="英語で回答してください"
-            className="flex-1 p-2 border rounded"
-          />
-          <button
-            onClick={startVoiceRecording}
-            className={`p-2 rounded ${
-              isRecording ? 'bg-red-500' : 'bg-blue-500'
-            } text-white`}
-          >
-            <Mic />
-          </button>
-        </div>
-        <button
-          onClick={submitAnswer}
-          className="w-full py-2 bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          回答を確認
-        </button>
-      </div>
-
-      {feedback && (
-        <div className="p-4 bg-blue-50 rounded-lg">
-          <h3 className="font-bold mb-2">フィードバック</h3>
-          <p>{feedback}</p>
-        </div>
-      )}
-
-      <button
-        onClick={generateNewQuestion}
-        className="mt-8 w-full py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-      >
-        次の問題へ
-      </button>
+      </main>
     </div>
   )
 }
