@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 import { Question, QuestionResponse, AnswerResponse, FavoriteResponse } from '@/types'
 import { ThemeToggle } from '@/components/theme-toggle'

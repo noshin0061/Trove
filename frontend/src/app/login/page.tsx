@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -17,35 +17,37 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
     setError('')
-
+  
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/token`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/login`, { // ← 修正①
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json', // ← 修正②
         },
-        body: new URLSearchParams({
-          username: email,
+        body: JSON.stringify({
+          email: email,  // ← 修正③ (username → email)
           password: password,
         }),
       })
-
+  
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.detail || 'Login failed')
       }
-
+  
       const data = await response.json()
-      console.log('Login successful, received token:', data.access_token.substring(0, 10) + '...') // デバッグ用
+      console.log('Login successful, received token:', data.access_token.substring(0, 10) + '...')
+      
       login(data.access_token)
       router.push('/')
     } catch (error) {
-      console.error('Login error:', error) // デバッグ用
+      console.error('Login error:', error)
       setError(error instanceof Error ? error.message : 'ログインに失敗しました')
     } finally {
       setIsLoading(false)
     }
   }
+  
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
