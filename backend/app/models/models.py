@@ -33,13 +33,20 @@ class MistakeWord(Base):
     count = Column(Integer, default=1)
     last_mistake_at = Column(DateTime(timezone=True), server_default=func.now())
 
+# app/models/models.py
 class FavoriteQuestion(Base):
     __tablename__ = "favorite_questions"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
     question_id = Column(Integer, ForeignKey("questions.id"))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    japanese_text = Column(String)  # 問題文
+    english_answer = Column(String)  # ユーザーの回答
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="favorite_questions")
+    question = relationship("Question", back_populates="favorites")
 
 class User(Base):
     __tablename__ = "users"
