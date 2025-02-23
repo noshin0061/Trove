@@ -1,0 +1,37 @@
+// components/Navigation.tsx
+'use client'
+
+import Link from 'next/link'
+import { useAuth } from '@/hooks/useAuth'
+import { ThemeToggle } from '@/components/theme-toggle'
+
+export function Navigation() {
+  const { isAuthenticated, isLoading } = useAuth()
+
+  return (
+    <header className="border-b dark:border-gray-800">
+      <div className="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="text-xl font-bold text-gray-900 dark:text-white">
+            英作文練習
+          </Link>
+        </div>
+        <div className="flex items-center gap-4">
+          {!isLoading && (
+            <Link
+              href={isAuthenticated ? '/logout' : '/login'}
+              className={`font-medium ${
+                isAuthenticated 
+                  ? 'text-red-600 hover:text-red-700' 
+                  : 'text-blue-600 hover:text-blue-700'
+              }`}
+            >
+              {isAuthenticated ? 'ログアウト' : 'ログイン'}
+            </Link>
+          )}
+          <ThemeToggle />
+        </div>
+      </div>
+    </header>
+  )
+}
