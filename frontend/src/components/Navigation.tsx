@@ -2,6 +2,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
 import { ThemeToggle } from '@/components/theme-toggle'
 
@@ -12,8 +13,20 @@ export function Navigation() {
     <header className="border-b dark:border-gray-800">
       <div className="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-xl font-bold text-gray-900 dark:text-white">
-            英作文練習
+          <Link href="/" className="flex items-center gap-3">
+            <div className="relative w-24 h-16">
+              <Image
+                src="/Trove_logo_white.png"
+                alt="英語学習アプリロゴ"
+                fill
+                sizes="48px"
+                className="object-contain"
+                priority
+              />
+            </div>
+            {/* <span className="text-xl font-bold text-gray-900 dark:text-white">
+              英作文練習
+            </span> */}
           </Link>
         </div>
         <div className="flex items-center gap-4">

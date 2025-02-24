@@ -34,15 +34,17 @@ export default function Home() {
                 </p>
               </Link>
               
-              {/* 今後追加される機能のためのプレースホルダー */}
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-dashed border-gray-300 dark:border-gray-700">
-                <h3 className="text-lg font-semibold text-gray-400 dark:text-gray-500">
-                  Coming Soon...
+              <Link 
+                href="/review"
+                className="block p-4 bg-green-50 dark:bg-green-900 rounded-lg hover:bg-green-100 dark:hover:bg-green-800 transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-green-700 dark:text-green-300">
+                  復習問題
                 </h3>
-                <p className="text-gray-500 dark:text-gray-400 mt-2">
-                  新しい機能を準備中です
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  保存した問題を復習できます。お気に入りの問題を繰り返し練習して、英語力を向上させましょう。
                 </p>
-              </div>
+              </Link>
             </div>
           </div>
         </div>
