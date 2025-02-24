@@ -14,7 +14,7 @@ export function Navigation() {
       <div className="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-3">
-            <div className="relative w-24 h-16">
+            <div className="relative w-16 h-8">
               <Image
                 src="/Trove_logo_white.png"
                 alt="英語学習アプリロゴ"
