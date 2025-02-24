@@ -18,15 +18,66 @@ export default function QuestionsPage() {
   const [question, setQuestion] = useState<Question | null>(null)
   const [answer, setAnswer] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [modelAnswer, setModelAnswer] = useState('') // フィードバックから抽出したモデル解答
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false)
   const [editableQuestion, setEditableQuestion] = useState('')
   const [editableAnswer, setEditableAnswer] = useState('')
+  const [isGeneratingTranslation, setIsGeneratingTranslation] = useState(false)
+  const [isModelAnswerAvailable, setIsModelAnswerAvailable] = useState(false) // モデル解答が利用可能かどうか
 
-  // QuestionsPage.tsx の一部を修正
+  // フィードバックからモデル解答を抽出する関数
+  const extractModelAnswerFromFeedback = (feedback) => {
+    // 「正確な答え:」や「模範解答:」の後に続く英文を探す（箇条書き対応）
+    const patterns = [
+      /正確な答え[:：]\s*-\s*([^]*?)(?:\n|$)/m,
+      /模範解答[:：]\s*-\s*([^]*?)(?:\n|$)/m,
+      /Model answer[:：]\s*-\s*([^]*?)(?:\n|$)/i,
+      /Correct answer[:：]\s*-\s*([^]*?)(?:\n|$)/i,
+      /Example[:：]\s*-\s*([^]*?)(?:\n|$)/i,
+      /例文[:：]\s*-\s*([^]*?)(?:\n|$)/
+    ];
+    
+    // リストの形式でない場合のパターン
+    const nonListPatterns = [
+      /正確な答え[:：]\s*([^]*?)(?:\n\n|$)/m,
+      /模範解答[:：]\s*([^]*?)(?:\n\n|$)/m,
+      /Model answer[:：]\s*([^]*?)(?:\n\n|$)/i,
+      /Correct answer[:：]\s*([^]*?)(?:\n\n|$)/i,
+      /Example[:：]\s*([^]*?)(?:\n\n|$)/i,
+      /例文[:：]\s*([^]*?)(?:\n\n|$)/
+    ];
+    
+    // 箇条書き形式のパターンを先に試す
+    for (const pattern of patterns) {
+      const match = feedback.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    
+    // 通常の形式のパターンを試す
+    for (const pattern of nonListPatterns) {
+      const match = feedback.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    
+    // パターンに一致しない場合は、英文を探す
+    const englishSentencePattern = /[A-Z][^.!?]*[.!?]/;
+    const englishMatch = feedback.match(englishSentencePattern);
+    if (englishMatch) {
+      return englishMatch[0].trim();
+    }
+    
+    // 何も見つからない場合は空文字列を返す
+    return "";
+  }
 
-const generateNewQuestion = async () => {
+  // 新しい問題を生成
+  const generateNewQuestion = async () => {
     try {
       setIsSubmitting(true)
       const headers = getAuthHeader();
@@ -62,6 +113,8 @@ const generateNewQuestion = async () => {
       })
       setAnswer('')
       setFeedback('')
+      setModelAnswer('') // モデル解答をリセット
+      setIsModelAnswerAvailable(false) // モデル解答の利用可能フラグをリセット
       setIsFavorite(false)
     } catch (error) {
       console.error('Error generating question:', error)
@@ -115,6 +168,12 @@ const generateNewQuestion = async () => {
 
       const data: AnswerResponse = await response.json()
       setFeedback(data.feedback)
+      
+      // フィードバックからモデル解答を抽出
+      const extractedAnswer = extractModelAnswerFromFeedback(data.feedback);
+      console.log('Extracted model answer:', extractedAnswer); // デバッグ用
+      setModelAnswer(extractedAnswer);
+      setIsModelAnswerAvailable(extractedAnswer.length > 0);
     } catch (error) {
       console.error('Error submitting answer:', error)
     } finally {
@@ -155,20 +214,80 @@ const generateNewQuestion = async () => {
     setAnswer(text)
   }
 
-  // ダイアログを開く時に現在の値をセット
-  const handleOpenDialog = () => {
-    setEditableQuestion(question?.japanese_text || '')
-    setEditableAnswer(answer)
-    setIsSaveDialogOpen(true)
+  // AI翻訳を取得する関数
+  const getAiTranslation = async (japaneseText: string) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/translation/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          japanese_text: japaneseText
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate AI translation')
+      }
+
+      const data = await response.json()
+      return data.translation
+    } catch (error) {
+      console.error('Error getting AI translation:', error)
+      return null
+    }
   }
 
-  // 新しい関数：問題を保存する
-  // 修正した問題を保存する
+  // ダイアログを開く時に現在の値をセット
+  const handleOpenDialog = async () => {
+    if (!question) return
+    
+    setEditableQuestion(question.japanese_text)
+    
+    // モデル解答が利用可能ならそれを使用
+    if (isModelAnswerAvailable && modelAnswer) {
+      setEditableAnswer(modelAnswer);
+      setIsGeneratingTranslation(false);
+    } 
+    // モデル解答が無い場合は、ユーザーの回答があればそれを使用
+    else if (answer.trim()) {
+      setEditableAnswer(answer);
+      setIsGeneratingTranslation(false);
+    } 
+    // それもない場合はAI翻訳を取得
+    else {
+      try {
+        setIsGeneratingTranslation(true);
+        const translation = await getAiTranslation(question.japanese_text);
+        if (translation) {
+          setEditableAnswer(translation);
+        } else {
+          setEditableAnswer('');
+        }
+      } catch (error) {
+        console.error('Error in AI translation:', error);
+        setEditableAnswer('');
+      } finally {
+        setIsGeneratingTranslation(false);
+      }
+    }
+    
+    setIsSaveDialogOpen(true);
+  }
+
+  // 問題を保存する
   const handleSaveQuestion = async () => {
     if (!question) return
 
     try {
       setIsSubmitting(true)
+      
+      // 保存するテキストを決定（モデル解答がある場合はそれを優先）
+      const answerToSave = isModelAnswerAvailable && modelAnswer ? modelAnswer : editableAnswer;
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/save-favorite`, {
         method: 'POST',
         headers: {
@@ -178,8 +297,8 @@ const generateNewQuestion = async () => {
         credentials: 'include',
         body: JSON.stringify({
           question_id: question.id,
-          japanese_text: editableQuestion, // 編集された問題文を使用
-          english_answer: editableAnswer   // 編集された回答を使用
+          japanese_text: editableQuestion,
+          english_answer: answerToSave // モデル解答または編集内容
         })
       })
 
@@ -188,9 +307,8 @@ const generateNewQuestion = async () => {
       }
 
       setIsSaveDialogOpen(false)
-      // オプション: 元の問題文と回答も更新する場合
+      // 元の問題文を更新
       setQuestion(prev => prev ? {...prev, japanese_text: editableQuestion} : null)
-      setAnswer(editableAnswer)
     } catch (error) {
       console.error('Error saving question:', error)
     } finally {
@@ -292,38 +410,38 @@ const generateNewQuestion = async () => {
           </Button>
 
           {feedback && (
-            <>
-              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
-                  フィードバック
-                </h3>
-                <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap">
-                  {feedback}
-                </p>
-              </div>
+          <>
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
+                フィードバック
+              </h3>
+              <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap">
+                {feedback}
+              </p>
+            </div>
 
-              <Button
-                variant="outline"
-                onClick={handleOpenDialog}
-                className="w-full"
-              >
-                問題を保存
-              </Button>
-            </>
-          )}
+            <Button
+              variant="outline"
+              onClick={handleOpenDialog}
+              disabled={isGeneratingTranslation}
+              className="w-full"
+            >
+              {isGeneratingTranslation ? 'AI翻訳を生成中...' : '問題を保存'}
+            </Button>
+          </>
+        )}
 
-          <Button
-            onClick={generateNewQuestion}
-            disabled={isSubmitting}
-            variant="secondary"
-            className="w-full"
-          >
-            次の問題へ
-          </Button>
+        <Button
+          onClick={generateNewQuestion}
+          disabled={isSubmitting}
+          variant="secondary"
+          className="w-full"
+        >
+          次の問題へ
+        </Button>
         </div>
       </main>
 
-      {/* Dialogの実装は変更なし */}
       <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -347,6 +465,11 @@ const generateNewQuestion = async () => {
                 className="mt-1"
                 placeholder="解答を入力"
               />
+              {isModelAnswerAvailable && (
+                <p className="text-xs text-gray-500 mt-1">
+                  ※フィードバックから抽出した模範解答が入力されています。編集しても保存時には模範解答が使用されます。
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter className="mt-6">
@@ -358,9 +481,9 @@ const generateNewQuestion = async () => {
             </Button>
             <Button 
               onClick={handleSaveQuestion}
-              disabled={!editableQuestion.trim() || !editableAnswer.trim()}
+              disabled={!editableQuestion.trim() || !editableAnswer.trim() || isSubmitting}
             >
-              保存する
+              {isSubmitting ? '保存中...' : '保存する'}
             </Button>
           </DialogFooter>
         </DialogContent>

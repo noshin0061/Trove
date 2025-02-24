@@ -45,6 +45,18 @@ export default function Home() {
                   保存した問題を復習できます。お気に入りの問題を繰り返し練習して、英語力を向上させましょう。
                 </p>
               </Link>
+
+              <Link 
+                href="/translation"
+                className="block p-4 bg-purple-50 dark:bg-purple-900 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-800 transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-purple-700 dark:text-purple-300">
+                  英訳サポート
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  自分で英訳できない文章をAIに翻訳してもらい、その解説を受けられます。役立つ表現を復習問題として保存できます。
+                </p>
+              </Link>
             </div>
           </div>
         </div>
