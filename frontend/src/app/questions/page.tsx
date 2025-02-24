@@ -8,6 +8,9 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { VoiceInput } from '@/components/VoiceInput'
 import Link from 'next/link'
 import { ArrowLeft, Star, StarOff } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 export default function QuestionsPage() {
   const { isAuthenticated, isLoading, getAuthHeader } = useAuth()
@@ -17,6 +20,9 @@ export default function QuestionsPage() {
   const [feedback, setFeedback] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false)
+  const [editableQuestion, setEditableQuestion] = useState('')
+  const [editableAnswer, setEditableAnswer] = useState('')
 
   // QuestionsPage.tsx の一部を修正
 
@@ -149,6 +155,49 @@ const generateNewQuestion = async () => {
     setAnswer(text)
   }
 
+  // ダイアログを開く時に現在の値をセット
+  const handleOpenDialog = () => {
+    setEditableQuestion(question?.japanese_text || '')
+    setEditableAnswer(answer)
+    setIsSaveDialogOpen(true)
+  }
+
+  // 新しい関数：問題を保存する
+  // 修正した問題を保存する
+  const handleSaveQuestion = async () => {
+    if (!question) return
+
+    try {
+      setIsSubmitting(true)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/save-favorite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          question_id: question.id,
+          japanese_text: editableQuestion, // 編集された問題文を使用
+          english_answer: editableAnswer   // 編集された回答を使用
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to save question')
+      }
+
+      setIsSaveDialogOpen(false)
+      // オプション: 元の問題文と回答も更新する場合
+      setQuestion(prev => prev ? {...prev, japanese_text: editableQuestion} : null)
+      setAnswer(editableAnswer)
+    } catch (error) {
+      console.error('Error saving question:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
@@ -172,7 +221,15 @@ const generateNewQuestion = async () => {
               英作文練習
             </h1>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-4">
+            <Link
+              href="/review"
+              className="text-blue-600 hover:text-blue-700 font-medium"
+            >
+              復習問題へ
+            </Link>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -226,45 +283,88 @@ const generateNewQuestion = async () => {
             </div>
           </div>
 
-          <button
+          <Button
             onClick={submitAnswer}
             disabled={isSubmitting || !answer.trim() || !question}
-            className="w-full py-2 px-4 rounded-lg font-medium
-                     bg-blue-600 hover:bg-blue-700 
-                     dark:bg-blue-500 dark:hover:bg-blue-600
-                     text-white
-                     disabled:bg-gray-300 dark:disabled:bg-gray-700
-                     disabled:cursor-not-allowed
-                     transition-colors"
+            className="w-full"
           >
             {isSubmitting ? '送信中...' : '回答を確認'}
-          </button>
+          </Button>
 
           {feedback && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-              <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
-                フィードバック
-              </h3>
-              <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap">
-                {feedback}
-              </p>
-            </div>
+            <>
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
+                  フィードバック
+                </h3>
+                <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap">
+                  {feedback}
+                </p>
+              </div>
+
+              <Button
+                variant="outline"
+                onClick={handleOpenDialog}
+                className="w-full"
+              >
+                問題を保存
+              </Button>
+            </>
           )}
 
-          <button
+          <Button
             onClick={generateNewQuestion}
             disabled={isSubmitting}
-            className="w-full py-2 px-4 rounded-lg font-medium
-                     bg-gray-200 hover:bg-gray-300 
-                     dark:bg-gray-700 dark:hover:bg-gray-600
-                     text-gray-900 dark:text-white
-                     disabled:opacity-50 disabled:cursor-not-allowed
-                     transition-colors"
+            variant="secondary"
+            className="w-full"
           >
             次の問題へ
-          </button>
+          </Button>
         </div>
       </main>
+
+      {/* Dialogの実装は変更なし */}
+      <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>問題を保存</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium">問題文</label>
+              <Textarea
+                value={editableQuestion}
+                onChange={(e) => setEditableQuestion(e.target.value)}
+                className="mt-1"
+                placeholder="問題文を入力"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">解答</label>
+              <Textarea
+                value={editableAnswer}
+                onChange={(e) => setEditableAnswer(e.target.value)}
+                className="mt-1"
+                placeholder="解答を入力"
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsSaveDialogOpen(false)}
+            >
+              キャンセル
+            </Button>
+            <Button 
+              onClick={handleSaveQuestion}
+              disabled={!editableQuestion.trim() || !editableAnswer.trim()}
+            >
+              保存する
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
