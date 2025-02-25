@@ -23,7 +23,11 @@ export default function ReviewPage() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showAnswer, setShowAnswer] = useState(false)
   const [userAnswer, setUserAnswer] = useState('')
-  const [isFetching, setIsFetching] = useState(true)  // 名前を変更
+  const [isFetching, setIsFetching] = useState(true)
+  const [feedback, setFeedback] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [modelAnswer, setModelAnswer] = useState('')
+  const [isModelAnswerAvailable, setIsModelAnswerAvailable] = useState(false)
 
   useEffect(() => {
     if (!isLoading) {
@@ -37,7 +41,7 @@ export default function ReviewPage() {
 
   const fetchReviewQuestions = async () => {
     try {
-      setIsFetching(true)  // 変更した名前を使用
+      setIsFetching(true)
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/favorites`, {
         headers: getAuthHeader(),
         credentials: 'include'
@@ -52,11 +56,12 @@ export default function ReviewPage() {
       }
       
       const data = await response.json()
+      console.log('Fetched review questions:', data);
       setQuestions(data)
     } catch (error) {
       console.error('Error fetching review questions:', error)
     } finally {
-      setIsFetching(false)  // 変更した名前を使用
+      setIsFetching(false)
     }
   }
 
@@ -66,15 +71,113 @@ export default function ReviewPage() {
 
   const currentQuestion = questions[currentIndex]
 
-  if (isLoading || isFetching) {  // 両方のローディング状態をチェック
+  const extractModelAnswerFromFeedback = (feedback: string) => {
+    const patterns = [
+      /正確な答え[:：]\s*-\s*([^]*?)(?:\n|$)/m,
+      /模範解答[:：]\s*-\s*([^]*?)(?:\n|$)/m,
+      /Model answer[:：]\s*-\s*([^]*?)(?:\n|$)/i,
+      /Correct answer[:：]\s*-\s*([^]*?)(?:\n|$)/i,
+      /Example[:：]\s*-\s*([^]*?)(?:\n|$)/i,
+      /例文[:：]\s*-\s*([^]*?)(?:\n|$)/
+    ];
+    
+    const nonListPatterns = [
+      /正確な答え[:：]\s*([^]*?)(?:\n\n|$)/m,
+      /模範解答[:：]\s*([^]*?)(?:\n\n|$)/m,
+      /Model answer[:：]\s*([^]*?)(?:\n\n|$)/i,
+      /Correct answer[:：]\s*([^]*?)(?:\n\n|$)/i,
+      /Example[:：]\s*([^]*?)(?:\n\n|$)/i,
+      /例文[:：]\s*([^]*?)(?:\n\n|$)/
+    ];
+    
+    for (const pattern of patterns) {
+      const match = feedback.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    
+    for (const pattern of nonListPatterns) {
+      const match = feedback.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    
+    const englishSentencePattern = /[A-Z][^.!?]*[.!?]/;
+    const englishMatch = feedback.match(englishSentencePattern);
+    if (englishMatch) {
+      return englishMatch[0].trim();
+    }
+    
+    return "";
+  }
+
+  const submitAnswer = async () => {
+    if (!userAnswer.trim() || !currentQuestion) return
+
+    try {
+      setIsSubmitting(true)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/review/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify({
+          favorite_question_id: currentQuestion.id,
+          answer_text: userAnswer,
+          japanese_text: currentQuestion.japanese_text
+        })
+      })
+
+      if (!response.ok) {
+        if (response.status === 422) {
+          console.error('Invalid request data:', {
+            favorite_question_id: currentQuestion.id,
+            answer_text: userAnswer,
+            japanese_text: currentQuestion.japanese_text
+          });
+          throw new Error('Invalid request data');
+        }
+        throw new Error('Failed to submit answer');
+      }
+
+      const data = await response.json()
+      setFeedback(data.feedback)
+    } catch (error) {
+      console.error('Error submitting answer:', error)
+      setFeedback('回答の確認中にエラーが発生しました。')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleNextQuestion = () => {
+    setCurrentIndex(i => i + 1)
+    setShowAnswer(false)
+    setUserAnswer('')
+    setFeedback('')
+    setModelAnswer('')
+    setIsModelAnswerAvailable(false)
+  }
+
+  const handlePrevQuestion = () => {
+    setCurrentIndex(i => i - 1)
+    setShowAnswer(false)
+    setUserAnswer('')
+    setFeedback('')
+    setModelAnswer('')
+    setIsModelAnswerAvailable(false)
+  }
+
+  if (isLoading || isFetching) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
         <p className="text-gray-600 dark:text-gray-400">Loading...</p>
       </div>
     )
   }
-
-  // ... 残りのコードは同じ ...
 
   if (questions.length === 0) {
     return (
@@ -149,16 +252,35 @@ export default function ReviewPage() {
           </div>
 
           <Button
+            onClick={submitAnswer}
+            disabled={isSubmitting || !userAnswer.trim()}
+            className="w-full"
+          >
+            {isSubmitting ? '送信中...' : '回答を確認'}
+          </Button>
+
+          {feedback && (
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
+                フィードバック
+              </h3>
+              <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap">
+                {feedback}
+              </p>
+            </div>
+          )}
+
+          <Button
             onClick={() => setShowAnswer(!showAnswer)}
             className="w-full"
           >
             {showAnswer ? '解答を隠す' : '解答を見る'}
           </Button>
 
-          {showAnswer && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+          {showAnswer && currentQuestion && (
+            <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
               <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
-                模範解答:
+                模範解答
               </h3>
               <p className="text-green-800 dark:text-green-200">
                 {currentQuestion.english_answer}
@@ -169,22 +291,14 @@ export default function ReviewPage() {
           <div className="flex justify-between gap-4">
             <Button
               variant="outline"
-              onClick={() => {
-                setCurrentIndex(i => i - 1)
-                setShowAnswer(false)
-                setUserAnswer('')
-              }}
+              onClick={handlePrevQuestion}
               disabled={currentIndex === 0}
               className="w-full"
             >
               前の問題
             </Button>
             <Button
-              onClick={() => {
-                setCurrentIndex(i => i + 1)
-                setShowAnswer(false)
-                setUserAnswer('')
-              }}
+              onClick={handleNextQuestion}
               disabled={currentIndex === questions.length - 1}
               className="w-full"
             >
