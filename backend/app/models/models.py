@@ -34,12 +34,15 @@ class UserAnswer(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     question_id = Column(Integer, ForeignKey("questions.id"))
+    favorite_question_id = Column(Integer, ForeignKey("favorite_questions.id"))
     user_answer = Column(String)
     feedback = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # リレーションシップを追加
     user = relationship("User", back_populates="answers")
     question = relationship("Question", back_populates="answers")
+    favorite_question = relationship("FavoriteQuestion", back_populates="answers")
 
 class MistakeWord(Base):
     __tablename__ = "mistake_words"
@@ -66,3 +69,4 @@ class FavoriteQuestion(Base):
     # リレーションシップを修正
     user = relationship("User", back_populates="favorite_questions")
     question = relationship("Question", back_populates="favorites")
+    answers = relationship("UserAnswer", back_populates="favorite_question")
