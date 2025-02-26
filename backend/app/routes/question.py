@@ -35,42 +35,11 @@ class FavoriteQuestionResponse(BaseModel):
     english_answer: str
     created_at: datetime
 
-# app/routes/question.py
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from pydantic import BaseModel  # 正しいインポート
-from datetime import datetime
-from ..database import get_db
-from ..models.models import Question, UserAnswer, MistakeWord, FavoriteQuestion, User
-from ..routes.auth import get_current_user  # authからインポート
-import os
-from openai import OpenAI
-import random
-from dotenv import load_dotenv
-from typing import List
-
-
-load_dotenv()
-
-router = APIRouter()
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# リクエストモデルの定義をルートハンドラーの前に配置
-class AnswerRequest(BaseModel):
-    question_id: int
-    answer_text: str
-
-class SaveFavoriteRequest(BaseModel):
-    question_id: int | None = None  # オプショナルなのでデフォルト値をNoneに設定
+# リクエストモデルを追加
+class StyleVariationRequest(BaseModel):
     japanese_text: str
-    english_answer: str
-
-class FavoriteQuestionResponse(BaseModel):
-    id: int
-    japanese_text: str
-    english_answer: str
-    created_at: datetime
+    user_answer: str
+    variation_type: str
 
 # AIによる問題生成部分の修正
 @router.post("/generate")
@@ -275,107 +244,43 @@ async def get_favorite_questions(
         print(f"Error fetching favorite questions: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/{question_id}/favorite")
-async def toggle_favorite(
-    question_id: int,
+@router.post("/style-variation")
+async def get_style_variation(
+    request: StyleVariationRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        existing = db.query(FavoriteQuestion).filter(
-            FavoriteQuestion.user_id == current_user.id,
-            FavoriteQuestion.question_id == question_id
-        ).first()
+        variation_type = request.variation_type
+        context = ""
         
-        if existing:
-            db.delete(existing)
-            is_favorite = False
+        if variation_type.startswith("context:"):
+            context = variation_type[8:]
+            system_prompt = f"""
+            あなたは英語教師です。以下の日本語を、指定されたシチュエーション（{context}）に適した英語に翻訳し、
+            その表現が適切な理由と、シチュエーションにおける言い回しのポイントを日本語で解説してください。
+            回答は以下の箇条書きでお願いします。
+            - 翻訳
+            - 解説
+            """
         else:
-            favorite = FavoriteQuestion(
-                user_id=current_user.id,
-                question_id=question_id
-            )
-            db.add(favorite)
-            is_favorite = True
-        
-        db.commit()
-        return {"is_favorite": is_favorite}
-    except Exception as e:
-        print(f"Error in toggle_favorite: {str(e)}")  # エラーログを追加
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+            style = "フォーマル" if variation_type == "formal" else "カジュアル"
+            system_prompt = f"""
+            あなたは英語教師です。以下の日本語を{style}な英語表現に翻訳し、
+            なぜその表現が{style}な場面に適しているのか、言い回しのポイントを日本語で解説してください。
+            """
 
-
-# 既存のルーターに新しいエンドポイントを追加
-@router.post("/save-favorite")
-async def save_favorite_question(
-    request: SaveFavoriteRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    try:
-        # 新しい問題を作成または既存の問題を更新
-        if request.question_id:
-            question = db.query(Question).filter(Question.id == request.question_id).first()
-            if question:
-                question.japanese_text = request.japanese_text
-                question.english_text = request.english_answer
-            else:
-                question = Question(
-                    japanese_text=request.japanese_text,
-                    english_text=request.english_answer,
-                    difficulty_level=1
-                )
-                db.add(question)
-        else:
-            question = Question(
-                japanese_text=request.japanese_text,
-                english_text=request.english_answer,
-                difficulty_level=1
-            )
-            db.add(question)
-        
-        db.commit()
-        db.refresh(question)
-
-        # お気に入りとして保存
-        favorite = FavoriteQuestion(
-            user_id=current_user.id,
-            question_id=question.id,
-            japanese_text=request.japanese_text,
-            english_answer=request.english_answer,
-            created_at=datetime.utcnow()  # 明示的に設定
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"日本語: {request.japanese_text}\n学習者の訳文: {request.user_answer}"}
+            ]
         )
-        db.add(favorite)
-        db.commit()
-
-        return {
-            "success": True,
-            "question_id": question.id,
-            "message": "Question saved successfully"
-        }
-    except Exception as e:
-        print(f"Error in save_favorite_question: {str(e)}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/favorites", response_model=List[FavoriteQuestionResponse])
-async def get_favorite_questions(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    try:
-        favorites = db.query(FavoriteQuestion).filter(
-            FavoriteQuestion.user_id == current_user.id
-        ).order_by(FavoriteQuestion.created_at.desc()).all()
         
-        return [{
-            "id": fav.id,
-            "japanese_text": fav.japanese_text,
-            "english_answer": fav.english_answer,
-            "created_at": fav.created_at
-        } for fav in favorites]
+        feedback = response.choices[0].message.content
+        return {"feedback": feedback}
+        
     except Exception as e:
-        print(f"Error fetching favorite questions: {str(e)}")
+        print(f"Error in get_style_variation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

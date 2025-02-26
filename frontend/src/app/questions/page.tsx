@@ -11,6 +11,7 @@ import { ArrowLeft, Star, StarOff } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { StyleVariationButtons } from "@/components/StyleVariationButtons"
 
 export default function QuestionsPage() {
   const { isAuthenticated, isLoading, getAuthHeader } = useAuth()
@@ -26,9 +27,11 @@ export default function QuestionsPage() {
   const [editableAnswer, setEditableAnswer] = useState('')
   const [isGeneratingTranslation, setIsGeneratingTranslation] = useState(false)
   const [isModelAnswerAvailable, setIsModelAnswerAvailable] = useState(false) // モデル解答が利用可能かどうか
+  const [isGettingVariation, setIsGettingVariation] = useState(false)
+  const [showVariationButtons, setShowVariationButtons] = useState(false)
 
   // フィードバックからモデル解答を抽出する関数
-  const extractModelAnswerFromFeedback = (feedback) => {
+  const extractModelAnswerFromFeedback = (feedback: string) => {
     // 「正確な答え:」や「模範解答:」の後に続く英文を探す（箇条書き対応）
     const patterns = [
       /正確な答え[:：]\s*-\s*([^]*?)(?:\n|$)/m,
@@ -116,6 +119,7 @@ export default function QuestionsPage() {
       setModelAnswer('') // モデル解答をリセット
       setIsModelAnswerAvailable(false) // モデル解答の利用可能フラグをリセット
       setIsFavorite(false)
+      setShowVariationButtons(false) // スタイルバリエーションボタンを非表示にリセット
     } catch (error) {
       console.error('Error generating question:', error)
       if (error instanceof Error) {
@@ -145,8 +149,24 @@ export default function QuestionsPage() {
     initializeQuestions()
   }, [isLoading, isAuthenticated, router])
 
+  // フィードバックが更新されたときにモデル解答を抽出する
+  useEffect(() => {
+    if (feedback) {
+      console.log('フィードバック受信:', feedback); // デバッグ用
+      const extractedAnswer = extractModelAnswerFromFeedback(feedback);
+      console.log('抽出されたモデル解答:', extractedAnswer); // デバッグ用
+      setModelAnswer(extractedAnswer);
+      setIsModelAnswerAvailable(!!extractedAnswer);
+    }
+  }, [feedback]);
+
+  // showVariationButtonsの状態変化をログ出力
+  useEffect(() => {
+    console.log('showVariationButtons状態:', showVariationButtons);
+  }, [showVariationButtons]);
+
   const submitAnswer = async () => {
-    if (!question || !answer.trim()) return
+    if (!answer.trim() || !question) return
 
     try {
       setIsSubmitting(true)
@@ -158,7 +178,8 @@ export default function QuestionsPage() {
         },
         body: JSON.stringify({
           question_id: question.id,
-          answer_text: answer
+          answer_text: answer,
+          japanese_text: question.japanese_text
         })
       })
 
@@ -166,16 +187,15 @@ export default function QuestionsPage() {
         throw new Error('Failed to submit answer')
       }
 
-      const data: AnswerResponse = await response.json()
+      const data = await response.json()
       setFeedback(data.feedback)
       
-      // フィードバックからモデル解答を抽出
-      const extractedAnswer = extractModelAnswerFromFeedback(data.feedback);
-      console.log('Extracted model answer:', extractedAnswer); // デバッグ用
-      setModelAnswer(extractedAnswer);
-      setIsModelAnswerAvailable(extractedAnswer.length > 0);
+      // スタイルバリエーションボタンを表示するフラグをtrueに設定
+      setShowVariationButtons(true)
+      console.log('回答送信完了、スタイルボタン表示フラグをtrueに設定'); // デバッグ用
     } catch (error) {
       console.error('Error submitting answer:', error)
+      setFeedback('回答の確認中にエラーが発生しました。')
     } finally {
       setIsSubmitting(false)
     }
@@ -316,6 +336,47 @@ export default function QuestionsPage() {
     }
   }
 
+  const getStyleVariation = async (variationType: string) => {
+    if (!question) return
+    console.log('Starting style variation request for type:', variationType) // デバッグログ
+
+    try {
+      setIsGettingVariation(true)
+      const requestBody = {
+        japanese_text: question.japanese_text,
+        user_answer: answer,
+        variation_type: variationType
+      }
+      console.log('Request body:', requestBody) // デバッグログ
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/questions/style-variation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader()
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('Response status:', response.status) // デバッグログ
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error('Error response:', errorData) // デバッグログ
+        throw new Error('Failed to get style variation')
+      }
+
+      const data = await response.json()
+      console.log('Success response:', data) // デバッグログ
+      
+      setFeedback(prev => `${prev}\n\n【${variationType.startsWith('context') ? 'カスタム' : variationType === 'formal' ? 'フォーマル' : 'カジュアル'}な表現】\n${data.feedback}`)
+    } catch (error) {
+      console.error('Error getting style variation:', error)
+    } finally {
+      setIsGettingVariation(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center">
@@ -410,35 +471,47 @@ export default function QuestionsPage() {
           </Button>
 
           {feedback && (
-          <>
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-              <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
-                フィードバック
-              </h3>
-              <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap">
-                {feedback}
-              </p>
+            <div className="space-y-4">
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <h3 className="font-semibold text-green-900 dark:text-green-300 mb-2">
+                  フィードバック
+                </h3>
+                <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap">
+                  {feedback}
+                </p>
+              </div>
+
+              {/* スタイルバリエーションボタン */}
+              {showVariationButtons && (
+                <div className="mt-4">
+                  <StyleVariationButtons
+                    japaneseText={question?.japanese_text || ''}
+                    userAnswer={answer}
+                    onGetVariation={getStyleVariation}
+                    isLoading={isGettingVariation}
+                  />
+                </div>
+              )}
+
+              <Button
+                variant="outline"
+                onClick={handleOpenDialog}
+                disabled={isGeneratingTranslation}
+                className="w-full"
+              >
+                {isGeneratingTranslation ? 'AI翻訳を生成中...' : '問題を保存'}
+              </Button>
             </div>
+          )}
 
-            <Button
-              variant="outline"
-              onClick={handleOpenDialog}
-              disabled={isGeneratingTranslation}
-              className="w-full"
-            >
-              {isGeneratingTranslation ? 'AI翻訳を生成中...' : '問題を保存'}
-            </Button>
-          </>
-        )}
-
-        <Button
-          onClick={generateNewQuestion}
-          disabled={isSubmitting}
-          variant="secondary"
-          className="w-full"
-        >
-          次の問題へ
-        </Button>
+          <Button
+            onClick={generateNewQuestion}
+            disabled={isSubmitting}
+            variant="secondary"
+            className="w-full"
+          >
+            次の問題へ
+          </Button>
         </div>
       </main>
 

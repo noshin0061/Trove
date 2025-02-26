@@ -59,7 +59,17 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       // 各種エラーハンドラ
       recognition.onerror = (event) => {
         console.error("Speech recognition error:", event.error);
-        setError(`エラー: ${event.error}`);
+        if (event.error === 'network') {
+          setError('ネットワーク接続を確認してください');
+          recognition.stop();
+          setTimeout(() => {
+            if (isListening) {  // まだリスニング状態の場合のみ再開
+              recognition.start();
+            }
+          }, 1000);
+        } else {
+          setError(`エラー: ${event.error}`);
+        }
         setIsListening(false);
       };
       

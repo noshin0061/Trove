@@ -4,7 +4,6 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useAuth } from '@/hooks/useAuth'
-import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Navigation() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -42,7 +41,6 @@ export function Navigation() {
               {isAuthenticated ? 'ログアウト' : 'ログイン'}
             </Link>
           )}
-          <ThemeToggle />
         </div>
       </div>
     </header>
