@@ -1,7 +1,7 @@
-# H2M (Human to Machine)
+# Trove
 
 ## 概要
-H2Mは、AIを活用した英語学習アプリケーションです。ユーザーが日本語を英語に翻訳する練習をサポートし、AIによる詳細なフィードバックを提供します。
+Troveは、AIを活用した英語学習アプリケーションです。ユーザーが日本語を英語に翻訳する練習をサポートし、AIによる詳細なフィードバックを提供します。
 
 ## 主な機能
 - 🎯 AIによる英語翻訳問題の自動生成
@@ -32,25 +32,29 @@ H2Mは、AIを活用した英語学習アプリケーションです。ユーザ
 - PostgreSQL
 
 ### 環境変数の設定
+```
 env
 DATABASE_URL=postgresql://username@localhost/H2M
 OPENAI_API_KEY=your_openai_api_key
 SECRET_KEY=your_secret_key
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
-
+```
 ### バックエンド起動
+```
 bash
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload
+```
 
 ### フロントエンド起動
+```
 bash
 cd frontend
 npm install
 npm run dev
-
+```
 
 ## API エンドポイント
 - `/api/v1/questions` - 問題生成・添削
@@ -64,9 +68,6 @@ npm run dev
 - OpenAI APIを活用した問題生成
 - 詳細なフィードバックシステム
 - 文体バリエーションの提案機能
-
-## ライセンス
-MIT
 
 ## 貢献
 プルリクエストやイシューの報告を歓迎します。大きな変更を加える場合は、まずイシューで変更内容を議論してください。
