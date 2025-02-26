@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function Home() {
   return (
@@ -11,7 +10,6 @@ export default function Home() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">
             英語学習アプリ
           </h1>
-          <ThemeToggle />
         </div>
       </header>
 
