@@ -18,7 +18,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://trove-virid.vercel.app/"  # フロントエンドのドメインを追加
+        "https://trove-virid.vercel.app"  # フロントエンドのドメインを追加
     ],
     allow_credentials=True,
     allow_methods=["*"],
