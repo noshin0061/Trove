@@ -1,15 +1,25 @@
 // components/Header.tsx
 import Link from 'next/link'
 import { ThemeToggle } from '@/components/theme-toggle'  // インポートを追加
+import Image from 'next/image'
 
-export function Header() {
+export default function Header() {
   return (
-    <header className="border-b dark:border-gray-800">
-      <div className="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            英作文練習
-          </h1>
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center">
+        <div className="mr-4 flex">
+          <Link href="/" className="mr-6 flex items-center space-x-2">
+            <Image
+              src="/logo.png"
+              alt="Trove Logo"
+              width={32}
+              height={32}
+              className="brightness-0 dark:brightness-100 dark:invert"
+            />
+            <span className="hidden font-bold sm:inline-block">
+              Trove
+            </span>
+          </Link>
         </div>
         <div className="flex items-center gap-4">
           <Link
