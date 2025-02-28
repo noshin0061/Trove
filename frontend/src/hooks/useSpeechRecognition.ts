@@ -12,41 +12,36 @@ interface SpeechRecognitionOptions {
 
 // TypeScriptエラーを避けるための基本的なイベント型
 interface SpeechRecognitionResult {
-  transcript: string
-  confidence: number
+  transcript: string;
+  confidence: number;
+}
+
+interface SpeechRecognitionResultItem {
+  [index: number]: SpeechRecognitionResult;
+  isFinal: boolean;
+  length: number;
 }
 
 interface SpeechRecognitionResultList {
-  [index: number]: SpeechRecognitionResult[]
-  length: number
-  isFinal: boolean
+  [index: number]: SpeechRecognitionResultItem;
+  length: number;
 }
 
 interface SpeechRecognitionEvent {
-  resultIndex: number
-  results: {
-    [index: number]: {
-      0: {
-        transcript: string
-        confidence: number
-      }
-      isFinal: boolean
-      length: number
-    }
-    length: number
-  }
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
 }
 
-interface SpeechRecognitionErrorEvent {
-  error: string
-  message: string
+interface SpeechRecognitionError {
+  error: string;
+  message: string;
 }
 
 // TypeScriptのための型拡張
 declare global {
   interface Window {
-    SpeechRecognition?: any
-    webkitSpeechRecognition?: any
+    SpeechRecognition: typeof SpeechRecognition;
+    webkitSpeechRecognition: typeof SpeechRecognition;
   }
 }
 
@@ -63,7 +58,7 @@ export function useSpeechRecognition({
   
   // デバッグログを有効化
   const debug = true;
-  const log = (...args: any[]) => {
+  const log = (...args: unknown[]) => {
     if (debug) console.log('🎤 [SpeechRecognition]:', ...args);
   };
   const logError = (...args: any[]) => {
@@ -72,23 +67,26 @@ export function useSpeechRecognition({
 
   // SpeechRecognition APIの初期化と確認
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    const checkSupport = () => {
+      if (typeof window === 'undefined') return;
+      log('Checking for SpeechRecognition support...');
+      
+      // ブラウザー間の互換性のためのチェック - TypeScript互換
+      const SpeechRecognitionAPI = 
+        window.SpeechRecognition || 
+        window.webkitSpeechRecognition;
+      
+      if (SpeechRecognitionAPI) {
+        setHasRecognitionSupport(true);
+        log('SpeechRecognition API is supported!');
+      } else {
+        setHasRecognitionSupport(false);
+        logError('SpeechRecognition API is not supported in this browser');
+      }
+    };
     
-    log('Checking for SpeechRecognition support...');
-    
-    // ブラウザー間の互換性のためのチェック - TypeScript互換
-    const SpeechRecognitionAPI = 
-      window.SpeechRecognition || 
-      window.webkitSpeechRecognition;
-    
-    if (SpeechRecognitionAPI) {
-      setHasRecognitionSupport(true);
-      log('SpeechRecognition API is supported!');
-    } else {
-      setHasRecognitionSupport(false);
-      logError('SpeechRecognition API is not supported in this browser');
-    }
-  }, []);
+    checkSupport();
+  }, [log, logError]);
 
   // SpeechRecognition インスタンスの初期化
   const initializeRecognition = useCallback(() => {
@@ -138,7 +136,7 @@ export function useSpeechRecognition({
       };
       
       // エラーハンドリング
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      recognition.onerror = (event: SpeechRecognitionError) => {
         logError('Recognition error:', event.error, event);
         
         if (onError) {
