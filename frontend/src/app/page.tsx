@@ -55,6 +55,15 @@ export default function Home() {
                   自分で英訳できない文章をAIに翻訳してもらい、その解説を受けられます。役立つ表現を復習問題として保存できます。
                 </p>
               </Link>
+
+              <div className="block p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                  Coming Soon...
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mt-2">
+                  多言語対応、数学、物理、試験対策などを実装予定！
+                </p>
+              </div>
             </div>
           </div>
         </div>
